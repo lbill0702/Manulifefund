@@ -6,133 +6,122 @@
 <title>Manulife MPF Fund Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.9/Recharts.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg:#0a0e1a;--surface:#111827;--surface2:#1a2236;--border:#1e2d45;--border2:#243352;
-    --text:#e8edf5;--text2:#8899b4;--text3:#4a5a78;
-    --green:#10d98c;--green2:#0aaa6e;--green-bg:rgba(16,217,140,.08);
-    --red:#f0556a;--red-bg:rgba(240,85,106,.08);
-    --amber:#f5a623;--amber-bg:rgba(245,166,35,.08);
-    --blue:#4d9ef7;--blue-bg:rgba(77,158,247,.08);
-    --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--serif:'Instrument Serif',serif;
-    --radius:12px;--shadow:0 4px 24px rgba(0,0,0,.4);
-  }
-  html{scroll-behavior:smooth}
-  body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;
-    background-image:radial-gradient(ellipse at 20% 0%,rgba(16,217,140,.05) 0%,transparent 60%),
-    radial-gradient(ellipse at 80% 100%,rgba(77,158,247,.04) 0%,transparent 60%)}
-  #root{min-height:100vh}
-  ::-webkit-scrollbar{width:4px;height:4px}
-  ::-webkit-scrollbar-track{background:var(--bg)}
-  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-  input[type=range]{-webkit-appearance:none;height:4px;border-radius:2px;background:var(--border2);outline:none}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--green);cursor:pointer}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a;--s1:#111827;--s2:#1a2236;--b1:#1e2d45;--b2:#243352;
+  --t1:#e8edf5;--t2:#8899b4;--t3:#4a5a78;
+  --g:#10d98c;--r:#f0556a;--am:#f5a623;--bl:#4d9ef7;
+  --gbg:rgba(16,217,140,.08);--rbg:rgba(240,85,106,.08);
+  --fn:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+body{font-family:var(--fn);background:var(--bg);color:var(--t1);min-height:100vh}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+input[type=range]{-webkit-appearance:none;height:4px;border-radius:2px;background:var(--b2);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--g);cursor:pointer}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 </style>
 </head>
 <body>
-<div id="root"></div>
-
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#4a5a78;font-family:'DM Sans',sans-serif;font-size:14px">Loading dashboard…</div></div>
 <script type="text/babel" data-presets="react">
-const {useState,useMemo,useCallback,useEffect} = React;
+const {useState,useMemo,useCallback,memo} = React;
 const {LineChart,Line,AreaChart,Area,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,ReferenceLine} = Recharts;
 
-// ── Math Engine ───────────────────────────────────────────────
-const TDAYS=252,RFR=0.04;
-const sortByDate=d=>[...d].sort((a,b)=>a.date.localeCompare(b.date));
-const navOnOrBefore=(s,t)=>{let r=null;for(const p of s){if(p.date<=t)r=p.nav;else break;}return r;};
-const subtractMonths=(ds,m)=>{const d=new Date(ds);d.setMonth(d.getMonth()-m);return d.toISOString().slice(0,10);};
-const startOfYear=ds=>ds.slice(0,4)+'-01-01';
-const fmtPct=(v,d=2)=>v===null?'—':(v>=0?'+':'')+((v||0)*100).toFixed(d)+'%';
-const fmtNum=(v,d=3)=>(v||0).toFixed(d);
+// ── Math ──────────────────────────────────────────────────────
+const sbd = d => [...d].sort((a,b)=>a.date.localeCompare(b.date));
+const nob = (s,t) => { let r=null; for(const p of s){if(p.date<=t)r=p.nav;else break;} return r; };
+const subM = (ds,m) => { const d=new Date(ds); d.setMonth(d.getMonth()-m); return d.toISOString().slice(0,10); };
+const soy = ds => ds.slice(0,4)+'-01-01';
+const fp = (v,d=2) => v===null?'—':(v>=0?'+':'')+((v||0)*100).toFixed(d)+'%';
+const fn = (v,d=3) => (v||0).toFixed(d);
 
-function computeDailyReturns(s){const r=[];for(let i=1;i<s.length;i++){const p=s[i-1].nav,c=s[i].nav;if(p>0)r.push((c-p)/p);}return r;}
-function annVol(dr){const n=dr.length;if(n<2)return 0;const m=dr.reduce((s,r)=>s+r,0)/n;return Math.sqrt(dr.reduce((s,r)=>s+(r-m)**2,0)/(n-1))*Math.sqrt(TDAYS);}
-function annRet(cum,n){if(n<=0)return 0;return Math.pow(1+cum,TDAYS/n)-1;}
-function computeMaxDD(s){
-  let peak=s[0].nav,pd=s[0].date,maxDD=0,mPeak=pd,mTrough=pd;
-  const series=[];
-  for(const pt of s){
-    if(pt.nav>peak){peak=pt.nav;pd=pt.date;}
-    const dd=peak>0?(pt.nav-peak)/peak:0;
-    series.push({date:pt.date,drawdown:dd});
-    if(dd<maxDD){maxDD=dd;mPeak=pd;mTrough=pt.date;}
+function dailyRet(s){const r=[];for(let i=1;i<s.length;i++){const p=s[i-1].nav,c=s[i].nav;if(p>0)r.push((c-p)/p);}return r;}
+function aVol(dr){const n=dr.length;if(n<2)return 0;const m=dr.reduce((s,r)=>s+r,0)/n;return Math.sqrt(dr.reduce((s,r)=>s+(r-m)**2,0)/(n-1)*252);}
+function aRet(cum,n){return n<=0?0:Math.pow(1+cum,252/n)-1;}
+function mdd(s){
+  let peak=s[0].nav,pd=s[0].date,mx=0,mp=pd,mt=pd;
+  const ser=[];
+  for(const p of s){
+    if(p.nav>peak){peak=p.nav;pd=p.date;}
+    const d=peak>0?(p.nav-peak)/peak:0;
+    ser.push({date:p.date,drawdown:d});
+    if(d<mx){mx=d;mp=pd;mt=p.date;}
   }
-  return{maxDrawdown:maxDD,peakDate:mPeak,troughDate:mTrough,drawdownSeries:series};
+  return{maxDrawdown:mx,peakDate:mp,troughDate:mt,drawdownSeries:ser};
 }
-function buildEquityCurve(s){const b=s[0].nav;return s.map(p=>({date:p.date,value:parseFloat(((p.nav/b)*100).toFixed(4))}));}
-function buildRollingVol(s,w=30){
-  const dr=computeDailyReturns(s),res=[];
-  for(let i=w-1;i<dr.length;i++)res.push({date:s[i+1].date,vol:parseFloat((annVol(dr.slice(i-w+1,i+1))*100).toFixed(4))});
+function eqCurve(s){const b=s[0].nav;return s.map(p=>({date:p.date,value:parseFloat(((p.nav/b)*100).toFixed(4))}));}
+function rolVol(s,w=30){
+  const dr=dailyRet(s),res=[];
+  for(let i=w-1;i<dr.length;i++)res.push({date:s[i+1].date,vol:parseFloat((aVol(dr.slice(i-w+1,i+1))*100).toFixed(4))});
   return res;
 }
-function computeStats(raw,rfr=RFR){
-  const s=sortByDate(raw),first=s[0],last=s[s.length-1],n=s.length-1;
-  const dr=computeDailyReturns(s),cum=(last.nav-first.nav)/first.nav;
-  const ar=annRet(cum,n),av=annVol(dr),sharpe=av===0?0:(ar-rfr)/av;
-  const{maxDrawdown,peakDate,troughDate,drawdownSeries}=computeMaxDD(s);
-  const calmar=maxDrawdown===0?0:ar/Math.abs(maxDrawdown);
-  return{fundId:first.fundId,fundName:first.fundName,tradingDays:n,cumulativeReturn:cum,
-    annualizedReturn:ar,annualizedVolatility:av,sharpeRatio:sharpe,
-    maxDrawdown,maxDrawdownStartDate:peakDate,maxDrawdownEndDate:troughDate,calmarRatio:calmar,
-    equityCurve:buildEquityCurve(s),drawdownSeries,rollingVolatility:buildRollingVol(s)};
+function stats(raw,rfr){
+  const s=sbd(raw),f=s[0],l=s[s.length-1],n=s.length-1;
+  const dr=dailyRet(s),cum=(l.nav-f.nav)/f.nav;
+  const ar=aRet(cum,n),av=aVol(dr),sh=av===0?0:(ar-rfr)/av;
+  const{maxDrawdown,peakDate,troughDate,drawdownSeries}=mdd(s);
+  return{fundId:f.fundId,fundName:f.fundName,tradingDays:n,cumulativeReturn:cum,
+    annualizedReturn:ar,annualizedVolatility:av,sharpeRatio:sh,
+    maxDrawdown,maxDrawdownStartDate:peakDate,maxDrawdownEndDate:troughDate,
+    calmarRatio:maxDrawdown===0?0:ar/Math.abs(maxDrawdown),
+    equityCurve:eqCurve(s),drawdownSeries,rollingVolatility:rolVol(s)};
 }
-function buildCumPerf(allFunds){
-  return Object.entries(allFunds).map(([id,raw])=>{
-    const s=sortByDate(raw),l=s[s.length-1],end=l.nav,lat=l.date;
-    const g=d=>navOnOrBefore(s,d),p=v=>v&&v>0?(end-v)/v:null;
+function cumPerf(all){
+  return Object.entries(all).map(([id,raw])=>{
+    const s=sbd(raw),l=s[s.length-1],end=l.nav,lat=l.date;
+    const g=d=>nob(s,d),p=v=>v&&v>0?(end-v)/v:null;
     return{fundId:id,fundName:s[0].fundName,
-      ytd:p(g(startOfYear(lat))),oneMonth:p(g(subtractMonths(lat,1))),
-      threeMonth:p(g(subtractMonths(lat,3))),sixMonth:p(g(subtractMonths(lat,6))),
-      oneYear:p(g(subtractMonths(lat,12))),threeYear:p(g(subtractMonths(lat,36))),
-      fiveYear:p(g(subtractMonths(lat,60))),sinceLaunch:(end-s[0].nav)/s[0].nav};
+      ytd:p(g(soy(lat))),oneMonth:p(g(subM(lat,1))),threeMonth:p(g(subM(lat,3))),
+      sixMonth:p(g(subM(lat,6))),oneYear:p(g(subM(lat,12))),threeYear:p(g(subM(lat,36))),
+      fiveYear:p(g(subM(lat,60))),sinceLaunch:(end-s[0].nav)/s[0].nav};
   });
 }
-function buildCalPerf(allFunds){
-  return Object.entries(allFunds).map(([id,raw])=>{
-    const s=sortByDate(raw);
-    const yr=y=>{const a=navOnOrBefore(s,y+'-01-01'),b=navOnOrBefore(s,y+'-12-31');return(!a||!b||a===0)?null:(b-a)/a;};
+function calPerf(all){
+  return Object.entries(all).map(([id,raw])=>{
+    const s=sbd(raw);
+    const yr=y=>{const a=nob(s,y+'-01-01'),b=nob(s,y+'-12-31');return(!a||!b||a===0)?null:(b-a)/a;};
     return{fundId:id,fundName:s[0].fundName,y2023:yr(2023),y2022:yr(2022),y2021:yr(2021),y2020:yr(2020),y2019:yr(2019)};
   });
 }
-function buildDivRecords(allFunds){
+function divRecs(all){
   const rec=[];
-  for(const[,data] of Object.entries(allFunds)){
-    const s=sortByDate(data);
+  for(const[,data] of Object.entries(all)){
+    const s=sbd(data);
     for(const pt of s.filter(d=>d.dividend&&d.dividend>0))
-      rec.push({fundId:pt.fundId,fundName:pt.fundName,exDate:pt.date,
-        dividendPerUnit:pt.dividend,annualizedYield:pt.nav>0?(pt.dividend*4)/pt.nav:0});
+      rec.push({fundId:pt.fundId,fundName:pt.fundName,exDate:pt.date,dividendPerUnit:pt.dividend,annualizedYield:pt.nav>0?(pt.dividend*4)/pt.nav:0});
   }
   return rec.sort((a,b)=>b.exDate.localeCompare(a.exDate));
 }
 
 // ── Mock Data ─────────────────────────────────────────────────
-function mulberry32(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function mb32(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const SPECS=[
-  {id:'MPF-GBF',name:'MPF Global Balanced Fund',nav:10,drift:0.07,vol:0.14,divFreq:90,divPct:0.015,seed:1001},
-  {id:'MPF-GEF',name:'MPF Global Equity Fund',nav:12.5,drift:0.10,vol:0.22,divFreq:0,divPct:0,seed:1002},
-  {id:'MPF-SBF',name:'MPF Stable Bond Fund',nav:8.8,drift:0.03,vol:0.06,divFreq:90,divPct:0.012,seed:1003},
-  {id:'MPF-GCF',name:'MPF Greater China Fund',nav:15.2,drift:0.06,vol:0.28,divFreq:180,divPct:0.008,seed:1004},
-  {id:'MPF-UST',name:'MPF US Technology Fund',nav:20,drift:0.14,vol:0.32,divFreq:0,divPct:0,seed:1005},
+  {id:'MPF-GBF',name:'MPF Global Balanced Fund',nav:10,dr:0.07,vol:0.14,df:90,dp:0.015,seed:1001},
+  {id:'MPF-GEF',name:'MPF Global Equity Fund',nav:12.5,dr:0.10,vol:0.22,df:0,dp:0,seed:1002},
+  {id:'MPF-SBF',name:'MPF Stable Bond Fund',nav:8.8,dr:0.03,vol:0.06,df:90,dp:0.012,seed:1003},
+  {id:'MPF-GCF',name:'MPF Greater China Fund',nav:15.2,dr:0.06,vol:0.28,df:180,dp:0.008,seed:1004},
+  {id:'MPF-UST',name:'MPF US Technology Fund',nav:20,dr:0.14,vol:0.32,df:0,dp:0,seed:1005},
 ];
 let _cache=null;
-function getAllFunds(){
+function allFunds(){
   if(_cache)return _cache;
   _cache={};
   for(const sp of SPECS){
-    const rng=mulberry32(sp.seed),data=[];
-    const dd=sp.drift/252,dv=sp.vol/Math.sqrt(252);
+    const rng=mb32(sp.seed),data=[],dd=sp.dr/252,dv=sp.vol/Math.sqrt(252);
     let nav=sp.nav,dc=0;
     for(let d=new Date('2019-01-02'),end=new Date('2024-12-31');d<=end;d.setDate(d.getDate()+1)){
       const dow=d.getDay();if(dow===0||dow===6)continue;
       const u1=rng(),u2=rng(),z=Math.sqrt(-2*Math.log(Math.max(u1,1e-10)))*Math.cos(2*Math.PI*u2);
       nav=Math.max(nav*(1+dd+dv*z),0.01);dc++;
       let div;
-      if(sp.divFreq>0&&dc%sp.divFreq===0){div=parseFloat((nav*sp.divPct).toFixed(4));nav-=div;}
+      if(sp.df>0&&dc%sp.df===0){div=parseFloat((nav*sp.dp).toFixed(4));nav-=div;}
       data.push({date:d.toISOString().slice(0,10),fundId:sp.id,fundName:sp.name,nav:parseFloat(nav.toFixed(4)),...(div!==undefined?{dividend:div}:{})});
     }
     _cache[sp.id]=data;
@@ -146,165 +135,131 @@ function sortData(data,sort){
   return[...data].sort((a,b)=>{
     const av=a[sort.col],bv=b[sort.col];
     if(av===null&&bv===null)return 0;if(av===null)return 1;if(bv===null)return -1;
-    const c=typeof av==='string'?av.localeCompare(bv):av-bv;
-    return sort.dir==='asc'?c:-c;
+    return sort.dir==='asc'?(typeof av==='string'?av.localeCompare(bv):av-bv):(typeof av==='string'?bv.localeCompare(av):bv-av);
   });
 }
-function subsample(arr,max){if(arr.length<=max)return arr;const s=Math.ceil(arr.length/max);return arr.filter((_,i)=>i%s===0||i===arr.length-1);}
-function filterPeriod(arr,p){
+function ss(arr,max){if(arr.length<=max)return arr;const s=Math.ceil(arr.length/max);return arr.filter((_,i)=>i%s===0||i===arr.length-1);}
+function fltP(arr,p){
   if(p==='MAX')return arr;
   const m={'1Y':12,'3Y':36,'5Y':60}[p];
-  const c=new Date('2024-12-31');c.setMonth(c.getMonth()-m);const cs=c.toISOString().slice(0,10);
+  const c=new Date('2024-12-31');c.setMonth(c.getMonth()-m);
+  const cs=c.toISOString().slice(0,10);
   return arr.filter(d=>d.date>=cs);
 }
 const xFmt=d=>{if(!d)return'';const dt=new Date(d);return dt.toLocaleString('en',{month:'short'})+"'"+String(dt.getFullYear()).slice(2);};
+const ttStyle={contentStyle:{background:'#1a2236',border:'1px solid #243352',borderRadius:8,fontSize:12},labelStyle:{color:'#8899b4'}};
 
 // ── Components ────────────────────────────────────────────────
-function PerfCell({value}){
-  if(value===null)return<td style={{padding:'9px 14px',textAlign:'right',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:12}}>—</td>;
-  const c=value>=0?'var(--green)':'var(--red)';
-  return<td style={{padding:'9px 14px',textAlign:'right',color:c,fontFamily:'var(--mono)',fontSize:12,fontWeight:500}}>{fmtPct(value)}</td>;
-}
+const PC = ({v}) => {
+  if(v===null)return <td style={{padding:'9px 14px',textAlign:'right',color:'var(--t3)',fontFamily:'var(--mono)',fontSize:12}}>—</td>;
+  return <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,fontWeight:500,color:v>=0?'var(--g)':'var(--r)'}}>{fp(v)}</td>;
+};
 
-function Th({col,label,sort,onSort,left}){
-  const active=sort.col===col;
-  const icon=active?(sort.dir==='asc'?'↑':'↓'):'⇅';
-  return(
-    <th onClick={()=>onSort(col)} style={{padding:'10px 14px',textAlign:left?'left':'right',fontSize:11,fontWeight:600,
-      letterSpacing:'.07em',textTransform:'uppercase',color:active?'var(--green)':'var(--text3)',
-      cursor:'pointer',whiteSpace:'nowrap',borderBottom:'1px solid var(--border)',background:'var(--surface2)',userSelect:'none'}}>
-      {label} <span style={{opacity:active?1:0.5}}>{icon}</span>
-    </th>
-  );
-}
+const Th = ({col,label,sort,onSort,left}) => (
+  <th onClick={()=>onSort(col)} style={{padding:'10px 14px',textAlign:left?'left':'right',fontSize:11,fontWeight:600,
+    letterSpacing:'.07em',textTransform:'uppercase',color:sort.col===col?'var(--g)':'var(--t3)',
+    cursor:'pointer',whiteSpace:'nowrap',borderBottom:'1px solid var(--b1)',background:'var(--s2)',userSelect:'none'}}>
+    {label} <span style={{opacity:sort.col===col?1:0.4}}>{sort.col===col?(sort.dir==='asc'?'↑':'↓'):'⇅'}</span>
+  </th>
+);
 
-function StatCard({label,value,sub,color='var(--text)'}){
-  return(
-    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:'16px',transition:'border-color .2s'}}>
-      <p style={{fontSize:10,fontWeight:600,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:8}}>{label}</p>
-      <p style={{fontSize:22,fontWeight:600,fontFamily:'var(--mono)',color,lineHeight:1}}>{value}</p>
-      {sub&&<p style={{fontSize:11,color:'var(--text3)',marginTop:6,lineHeight:1.4}}>{sub}</p>}
-    </div>
-  );
-}
+const Card = ({label,value,sub,col}) => (
+  <div style={{background:'var(--s1)',border:'1px solid var(--b1)',borderRadius:12,padding:16}}>
+    <p style={{fontSize:10,fontWeight:600,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--t3)',marginBottom:8}}>{label}</p>
+    <p style={{fontSize:22,fontWeight:600,fontFamily:'var(--mono)',color:col||'var(--t1)',lineHeight:1}}>{value}</p>
+    {sub&&<p style={{fontSize:11,color:'var(--t3)',marginTop:6,lineHeight:1.4}}>{sub}</p>}
+  </div>
+);
 
 // ── FundTable ─────────────────────────────────────────────────
-function FundTable({cumulative,calendar,dividends,onSelect}){
-  const[tab,setTab]=useState('cumulative');
+function FundTable({cum,cal,div,onSel}){
+  const[tab,setTab]=useState('cum');
   const[sort,setSort]=useState({col:'',dir:null});
   const[search,setSearch]=useState('');
-  const handleSort=useCallback(col=>{
-    setSort(prev=>prev.col!==col?{col,dir:'asc'}:prev.dir==='asc'?{col,dir:'desc'}:{col:'',dir:null});
+  const hs=useCallback(col=>{
+    setSort(p=>p.col!==col?{col,dir:'asc'}:p.dir==='asc'?{col,dir:'desc'}:{col:'',dir:null});
   },[]);
   const sw=t=>{setTab(t);setSort({col:'',dir:null});};
   const flt=arr=>sortData(arr.filter(r=>r.fundName.toLowerCase().includes(search.toLowerCase())),sort);
-
-  const tabStyle=active=>({
-    padding:'10px 18px',fontSize:13,fontWeight:500,border:'none',
-    borderBottom:active?'2px solid var(--green)':'2px solid transparent',
-    background:'transparent',color:active?'var(--green)':'var(--text2)',
-    cursor:'pointer',transition:'all .2s',letterSpacing:'.01em',
-  });
-  const trStyle=i=>({borderBottom:'1px solid var(--border)',background:i%2===0?'transparent':'rgba(255,255,255,.01)',});
+  const ts=a=>({padding:'10px 18px',fontSize:13,fontWeight:500,border:'none',borderBottom:a?'2px solid var(--g)':'2px solid transparent',background:'transparent',color:a?'var(--g)':'var(--t2)',cursor:'pointer',fontFamily:'var(--fn)'});
+  const tr=i=>({borderBottom:'1px solid var(--b1)',background:i%2===0?'transparent':'rgba(255,255,255,.015)'});
+  const btnStyle={background:'none',border:'none',color:'var(--t1)',fontSize:13,fontWeight:500,cursor:'pointer',textAlign:'left',padding:0,fontFamily:'var(--fn)'};
 
   return(
-    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden',boxShadow:'var(--shadow)'}}>
+    <div style={{background:'var(--s1)',border:'1px solid var(--b1)',borderRadius:12,overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
       <div style={{padding:'20px 20px 0'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:12}}>
           <div>
-            <h2 style={{fontSize:16,fontWeight:600,color:'var(--text)',letterSpacing:'-.01em'}}>Fund Performance Portal</h2>
-            <p style={{fontSize:12,color:'var(--text3)',marginTop:3}}>Manulife Global Select (MPF) · Click fund name to analyze</p>
+            <h2 style={{fontSize:16,fontWeight:600,letterSpacing:'-.01em'}}>Fund Performance Portal</h2>
+            <p style={{fontSize:12,color:'var(--t3)',marginTop:3}}>Manulife Global Select (MPF) · Click fund name to analyze</p>
           </div>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search funds…"
-            style={{padding:'8px 14px',background:'var(--surface2)',border:'1px solid var(--border2)',borderRadius:8,
-              fontSize:13,color:'var(--text)',outline:'none',width:220,fontFamily:'var(--font)'}}/>
+            style={{padding:'8px 14px',background:'var(--s2)',border:'1px solid var(--b2)',borderRadius:8,fontSize:13,color:'var(--t1)',outline:'none',width:220,fontFamily:'var(--fn)'}}/>
         </div>
-        <div style={{display:'flex',gap:0,borderBottom:'1px solid var(--border)'}}>
-          {[['cumulative','Cumulative'],['calendar','Calendar Year'],['dividend','Dividends']].map(([t,l])=>(
-            <button key={t} style={tabStyle(tab===t)} onClick={()=>sw(t)}>{l}</button>
+        <div style={{display:'flex',gap:0,borderBottom:'1px solid var(--b1)'}}>
+          {[['cum','Cumulative'],['cal','Calendar Year'],['div','Dividends']].map(([t,l])=>(
+            <button key={t} style={ts(tab===t)} onClick={()=>sw(t)}>{l}</button>
           ))}
         </div>
       </div>
-
       <div style={{overflowX:'auto'}}>
-        {tab==='cumulative'&&(
+        {tab==='cum'&&(
           <table style={{width:'100%',borderCollapse:'collapse',minWidth:860}}>
             <thead><tr>
-              <Th col="fundName" label="Fund Name" sort={sort} onSort={handleSort} left/>
+              <Th col="fundName" label="Fund Name" sort={sort} onSort={hs} left/>
               {[['ytd','YTD'],['oneMonth','1M'],['threeMonth','3M'],['sixMonth','6M'],['oneYear','1Y'],['threeYear','3Y'],['fiveYear','5Y'],['sinceLaunch','Since Launch']].map(([c,l])=>(
-                <Th key={c} col={c} label={l} sort={sort} onSort={handleSort}/>
+                <Th key={c} col={c} label={l} sort={sort} onSort={hs}/>
               ))}
             </tr></thead>
-            <tbody>{flt(cumulative).map((r,i)=>(
-              <tr key={r.fundId} style={trStyle(i)}>
+            <tbody>{flt(cum).map((r,i)=>(
+              <tr key={r.fundId} style={tr(i)}>
                 <td style={{padding:'9px 14px'}}>
-                  <button onClick={()=>onSelect(r.fundId,r.fundName)}
-                    style={{background:'none',border:'none',color:'var(--text)',fontSize:13,fontWeight:500,
-                      cursor:'pointer',textAlign:'left',padding:0,fontFamily:'var(--font)'}}
-                    onMouseEnter={e=>{e.target.style.color='var(--green)';}}
-                    onMouseLeave={e=>{e.target.style.color='var(--text)';}}>
-                    {r.fundName}
-                  </button>
+                  <button style={btnStyle} onMouseEnter={e=>e.target.style.color='var(--g)'} onMouseLeave={e=>e.target.style.color='var(--t1)'} onClick={()=>onSel(r.fundId,r.fundName)}>{r.fundName}</button>
                 </td>
-                <PerfCell value={r.ytd}/><PerfCell value={r.oneMonth}/><PerfCell value={r.threeMonth}/>
-                <PerfCell value={r.sixMonth}/><PerfCell value={r.oneYear}/><PerfCell value={r.threeYear}/>
-                <PerfCell value={r.fiveYear}/><PerfCell value={r.sinceLaunch}/>
+                <PC v={r.ytd}/><PC v={r.oneMonth}/><PC v={r.threeMonth}/>
+                <PC v={r.sixMonth}/><PC v={r.oneYear}/><PC v={r.threeYear}/>
+                <PC v={r.fiveYear}/><PC v={r.sinceLaunch}/>
               </tr>
             ))}</tbody>
           </table>
         )}
-        {tab==='calendar'&&(
-          <table style={{width:'100%',borderCollapse:'collapse',minWidth:680}}>
+        {tab==='cal'&&(
+          <table style={{width:'100%',borderCollapse:'collapse',minWidth:660}}>
             <thead><tr>
-              <Th col="fundName" label="Fund Name" sort={sort} onSort={handleSort} left/>
+              <Th col="fundName" label="Fund Name" sort={sort} onSort={hs} left/>
               {[['y2023','2023'],['y2022','2022'],['y2021','2021'],['y2020','2020'],['y2019','2019']].map(([c,l])=>(
-                <Th key={c} col={c} label={l} sort={sort} onSort={handleSort}/>
+                <Th key={c} col={c} label={l} sort={sort} onSort={hs}/>
               ))}
             </tr></thead>
-            <tbody>{flt(calendar).map((r,i)=>(
-              <tr key={r.fundId} style={trStyle(i)}>
-                <td style={{padding:'9px 14px'}}>
-                  <button onClick={()=>onSelect(r.fundId,r.fundName)}
-                    style={{background:'none',border:'none',color:'var(--text)',fontSize:13,fontWeight:500,cursor:'pointer',textAlign:'left',padding:0,fontFamily:'var(--font)'}}
-                    onMouseEnter={e=>e.target.style.color='var(--green)'}
-                    onMouseLeave={e=>e.target.style.color='var(--text)'}>
-                    {r.fundName}
-                  </button>
-                </td>
-                <PerfCell value={r.y2023}/><PerfCell value={r.y2022}/><PerfCell value={r.y2021}/>
-                <PerfCell value={r.y2020}/><PerfCell value={r.y2019}/>
+            <tbody>{flt(cal).map((r,i)=>(
+              <tr key={r.fundId} style={tr(i)}>
+                <td style={{padding:'9px 14px'}}><button style={btnStyle} onMouseEnter={e=>e.target.style.color='var(--g)'} onMouseLeave={e=>e.target.style.color='var(--t1)'} onClick={()=>onSel(r.fundId,r.fundName)}>{r.fundName}</button></td>
+                <PC v={r.y2023}/><PC v={r.y2022}/><PC v={r.y2021}/><PC v={r.y2020}/><PC v={r.y2019}/>
               </tr>
             ))}</tbody>
           </table>
         )}
-        {tab==='dividend'&&(
-          <table style={{width:'100%',borderCollapse:'collapse',minWidth:620}}>
+        {tab==='div'&&(
+          <table style={{width:'100%',borderCollapse:'collapse',minWidth:600}}>
             <thead><tr>
-              <Th col="fundName" label="Fund Name" sort={sort} onSort={handleSort} left/>
-              <Th col="exDate" label="Ex-Date" sort={sort} onSort={handleSort}/>
-              <Th col="dividendPerUnit" label="Div/Unit" sort={sort} onSort={handleSort}/>
-              <Th col="annualizedYield" label="Ann. Yield" sort={sort} onSort={handleSort}/>
+              <Th col="fundName" label="Fund Name" sort={sort} onSort={hs} left/>
+              <Th col="exDate" label="Ex-Date" sort={sort} onSort={hs}/>
+              <Th col="dividendPerUnit" label="Div/Unit" sort={sort} onSort={hs}/>
+              <Th col="annualizedYield" label="Ann. Yield" sort={sort} onSort={hs}/>
             </tr></thead>
-            <tbody>{flt(dividends).map((r,i)=>(
-              <tr key={r.fundId+r.exDate} style={trStyle(i)}>
-                <td style={{padding:'9px 14px'}}>
-                  <button onClick={()=>onSelect(r.fundId,r.fundName)}
-                    style={{background:'none',border:'none',color:'var(--text)',fontSize:13,fontWeight:500,cursor:'pointer',textAlign:'left',padding:0,fontFamily:'var(--font)'}}
-                    onMouseEnter={e=>e.target.style.color='var(--green)'}
-                    onMouseLeave={e=>e.target.style.color='var(--text)'}>
-                    {r.fundName}
-                  </button>
-                </td>
-                <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,color:'var(--text2)'}}>{r.exDate}</td>
-                <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,color:'var(--text2)'}}>{r.dividendPerUnit.toFixed(4)}</td>
-                <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,color:'var(--green)'}}>{fmtPct(r.annualizedYield)}</td>
+            <tbody>{flt(div).map((r,i)=>(
+              <tr key={r.fundId+r.exDate} style={tr(i)}>
+                <td style={{padding:'9px 14px'}}><button style={btnStyle} onMouseEnter={e=>e.target.style.color='var(--g)'} onMouseLeave={e=>e.target.style.color='var(--t1)'} onClick={()=>onSel(r.fundId,r.fundName)}>{r.fundName}</button></td>
+                <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,color:'var(--t2)'}}>{r.exDate}</td>
+                <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,color:'var(--t2)'}}>{r.dividendPerUnit.toFixed(4)}</td>
+                <td style={{padding:'9px 14px',textAlign:'right',fontFamily:'var(--mono)',fontSize:12,color:'var(--g)'}}>{fp(r.annualizedYield)}</td>
               </tr>
             ))}</tbody>
           </table>
         )}
       </div>
-      <div style={{padding:'10px 20px',borderTop:'1px solid var(--border)',background:'var(--surface2)'}}>
-        <p style={{fontSize:11,color:'var(--text3)'}}>Data as of 31 Dec 2024 · Synthetic data for demonstration only · Past performance is not indicative of future results</p>
+      <div style={{padding:'10px 20px',borderTop:'1px solid var(--b1)',background:'var(--s2)'}}>
+        <p style={{fontSize:11,color:'var(--t3)'}}>Data as of 31 Dec 2024 · Synthetic data · Past performance is not indicative of future results</p>
       </div>
     </div>
   );
@@ -314,209 +269,164 @@ function FundTable({cumulative,calendar,dividends,onSelect}){
 function FundAnalyzer({fundId,fundName,rawData,onBack}){
   const[rfr,setRfr]=useState(4);
   const[period,setPeriod]=useState('MAX');
-  const stats=useMemo(()=>computeStats(rawData,rfr/100),[rawData,rfr]);
+  const st=useMemo(()=>stats(rawData,rfr/100),[rawData,rfr]);
+  const eq=useMemo(()=>ss(fltP(st.equityCurve,period),400),[st.equityCurve,period]);
+  const dd=useMemo(()=>ss(fltP(st.drawdownSeries,period),400),[st.drawdownSeries,period]);
+  const vl=useMemo(()=>ss(fltP(st.rollingVolatility,period),400),[st.rollingVolatility,period]);
 
-  const eq=useMemo(()=>subsample(filterPeriod(stats.equityCurve,period),400),[stats.equityCurve,period]);
-  const dd=useMemo(()=>subsample(filterPeriod(stats.drawdownSeries,period),400),[stats.drawdownSeries,period]);
-  const vl=useMemo(()=>subsample(filterPeriod(stats.rollingVolatility,period),400),[stats.rollingVolatility,period]);
-
-  const retPos=stats.annualizedReturn>=0;
-  const sharpCol=stats.sharpeRatio>=1?'var(--green)':stats.sharpeRatio>=0?'var(--amber)':'var(--red)';
-  const ddCol=stats.maxDrawdown>-0.1?'var(--green)':stats.maxDrawdown>-0.25?'var(--amber)':'var(--red)';
-  const calCol=stats.calmarRatio>=0.5?'var(--green)':stats.calmarRatio>=0.25?'var(--amber)':'var(--red)';
-
-  const chartCard={background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:20,boxShadow:'var(--shadow)'};
-  const tt={contentStyle:{background:'var(--surface2)',border:'1px solid var(--border2)',borderRadius:8,fontSize:12},labelStyle:{color:'var(--text2)'}};
+  const cc={background:'var(--s1)',border:'1px solid var(--b1)',borderRadius:12,padding:20,boxShadow:'0 4px 24px rgba(0,0,0,.4)'};
 
   return(
     <div style={{display:'flex',flexDirection:'column',gap:20}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
         <div>
-          <button onClick={onBack} style={{background:'none',border:'none',color:'var(--text3)',fontSize:13,cursor:'pointer',padding:0,marginBottom:8,fontFamily:'var(--font)'}}
-            onMouseEnter={e=>e.target.style.color='var(--green)'} onMouseLeave={e=>e.target.style.color='var(--text3)'}>
+          <button onClick={onBack} style={{background:'none',border:'none',color:'var(--t3)',fontSize:13,cursor:'pointer',padding:0,marginBottom:8,fontFamily:'var(--fn)'}}
+            onMouseEnter={e=>e.target.style.color='var(--g)'} onMouseLeave={e=>e.target.style.color='var(--t3)'}>
             ← Back to Fund List
           </button>
-          <h2 style={{fontSize:20,fontWeight:600,color:'var(--text)',letterSpacing:'-.02em'}}>{fundName}</h2>
-          <p style={{fontSize:12,color:'var(--text3)',marginTop:4}}>{fundId} · {stats.tradingDays} trading days · 2019–2024</p>
+          <h2 style={{fontSize:20,fontWeight:600,letterSpacing:'-.02em'}}>{fundName}</h2>
+          <p style={{fontSize:12,color:'var(--t3)',marginTop:4}}>{fundId} · {st.tradingDays} trading days · 2019–2024</p>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:12,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 16px'}}>
-          <span style={{fontSize:12,color:'var(--text3)'}}>Risk-Free Rate</span>
+        <div style={{display:'flex',alignItems:'center',gap:12,background:'var(--s1)',border:'1px solid var(--b1)',borderRadius:10,padding:'10px 16px'}}>
+          <span style={{fontSize:12,color:'var(--t3)'}}>Risk-Free Rate</span>
           <input type="range" min={0} max={8} step={0.5} value={rfr} onChange={e=>setRfr(+e.target.value)} style={{width:100}}/>
-          <span style={{fontSize:13,fontFamily:'var(--mono)',color:'var(--green)',width:32}}>{rfr.toFixed(1)}%</span>
+          <span style={{fontSize:13,fontFamily:'var(--mono)',color:'var(--g)',width:32}}>{rfr.toFixed(1)}%</span>
         </div>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12}}>
-        <StatCard label="Ann. Return" value={fmtPct(stats.annualizedReturn)} sub="Geometric CAGR" color={retPos?'var(--green)':'var(--red)'}/>
-        <StatCard label="Cum. Return" value={fmtPct(stats.cumulativeReturn)} sub="Since inception" color={retPos?'var(--green)':'var(--red)'}/>
-        <StatCard label="Ann. Volatility" value={fmtPct(stats.annualizedVolatility)} sub="σ × √252" color="var(--blue)"/>
-        <StatCard label="Sharpe Ratio" value={fmtNum(stats.sharpeRatio)} sub={`RFR = ${rfr}%`} color={sharpCol}/>
-        <StatCard label="Max Drawdown" value={fmtPct(stats.maxDrawdown)} sub={`${stats.maxDrawdownStartDate} → ${stats.maxDrawdownEndDate}`} color={ddCol}/>
-        <StatCard label="Calmar Ratio" value={fmtNum(stats.calmarRatio)} sub="CAGR / |MaxDD|" color={calCol}/>
+        <Card label="Ann. Return" value={fp(st.annualizedReturn)} sub="Geometric CAGR" col={st.annualizedReturn>=0?'var(--g)':'var(--r)'}/>
+        <Card label="Cum. Return" value={fp(st.cumulativeReturn)} sub="Since inception" col={st.cumulativeReturn>=0?'var(--g)':'var(--r)'}/>
+        <Card label="Ann. Volatility" value={fp(st.annualizedVolatility)} sub="σ × √252" col="var(--bl)"/>
+        <Card label="Sharpe Ratio" value={fn(st.sharpeRatio)} sub={`RFR = ${rfr}%`} col={st.sharpeRatio>=1?'var(--g)':st.sharpeRatio>=0?'var(--am)':'var(--r)'}/>
+        <Card label="Max Drawdown" value={fp(st.maxDrawdown)} sub={st.maxDrawdownStartDate+' → '+st.maxDrawdownEndDate} col={st.maxDrawdown>-0.1?'var(--g)':st.maxDrawdown>-0.25?'var(--am)':'var(--r)'}/>
+        <Card label="Calmar Ratio" value={fn(st.calmarRatio)} sub="CAGR / |MaxDD|" col={st.calmarRatio>=0.5?'var(--g)':st.calmarRatio>=0.25?'var(--am)':'var(--r)'}/>
       </div>
 
       <div style={{display:'flex',alignItems:'center',gap:6,justifyContent:'flex-end'}}>
-        <span style={{fontSize:11,color:'var(--text3)',marginRight:4}}>Period:</span>
+        <span style={{fontSize:11,color:'var(--t3)',marginRight:4}}>Period:</span>
         {['1Y','3Y','5Y','MAX'].map(p=>(
           <button key={p} onClick={()=>setPeriod(p)} style={{padding:'5px 12px',fontSize:12,fontWeight:500,borderRadius:6,cursor:'pointer',
-            background:period===p?'var(--green-bg)':'transparent',
-            border:period===p?'1px solid var(--green)':'1px solid transparent',
-            color:period===p?'var(--green)':'var(--text2)',fontFamily:'var(--font)'}}>
+            background:period===p?'var(--gbg)':'transparent',border:period===p?'1px solid var(--g)':'1px solid transparent',
+            color:period===p?'var(--g)':'var(--t2)',fontFamily:'var(--fn)'}}>
             {p}
           </button>
         ))}
       </div>
 
-      <div style={chartCard}>
+      <div style={cc}>
         <p style={{fontSize:13,fontWeight:600,marginBottom:4}}>Normalized Equity Curve</p>
-        <p style={{fontSize:11,color:'var(--text3)',marginBottom:16}}>Base 100 at inception</p>
+        <p style={{fontSize:11,color:'var(--t3)',marginBottom:16}}>Base 100 at inception</p>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={eq} margin={{top:4,right:8,bottom:4,left:4}}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
-            <XAxis dataKey="date" tickFormatter={xFmt} tick={{fill:'var(--text3)',fontSize:11}} axisLine={{stroke:'var(--border)'}} tickLine={false} interval="preserveStartEnd" minTickGap={60}/>
-            <YAxis domain={['auto','auto']} tick={{fill:'var(--text3)',fontSize:11}} axisLine={{stroke:'var(--border)'}} tickLine={false} tickFormatter={v=>v.toFixed(0)} width={40}/>
-            <Tooltip {...tt} formatter={v=>[v.toFixed(2),'NAV Index']}/>
-            <ReferenceLine y={100} stroke="var(--border2)" strokeDasharray="4 2"/>
-            <Line type="monotone" dataKey="value" stroke="var(--green)" strokeWidth={2} dot={false} isAnimationActive={false}/>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45"/>
+            <XAxis dataKey="date" tickFormatter={xFmt} tick={{fill:'#4a5a78',fontSize:11}} axisLine={{stroke:'#1e2d45'}} tickLine={false} interval="preserveStartEnd" minTickGap={60}/>
+            <YAxis domain={['auto','auto']} tick={{fill:'#4a5a78',fontSize:11}} axisLine={{stroke:'#1e2d45'}} tickLine={false} tickFormatter={v=>v.toFixed(0)} width={40}/>
+            <Tooltip {...ttStyle} formatter={v=>[v.toFixed(2),'NAV Index']}/>
+            <ReferenceLine y={100} stroke="#243352" strokeDasharray="4 2"/>
+            <Line type="monotone" dataKey="value" stroke="#10d98c" strokeWidth={2} dot={false} isAnimationActive={false}/>
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      <div style={chartCard}>
+      <div style={cc}>
         <p style={{fontSize:13,fontWeight:600,marginBottom:4}}>Drawdown (Underwater Chart)</p>
-        <p style={{fontSize:11,color:'var(--text3)',marginBottom:16}}>
-          Max drawdown: <span style={{color:'var(--red)',fontFamily:'var(--mono)',fontWeight:600}}>{fmtPct(stats.maxDrawdown)}</span>
-        </p>
+        <p style={{fontSize:11,color:'var(--t3)',marginBottom:16}}>Max: <span style={{color:'#f0556a',fontFamily:'var(--mono)',fontWeight:600}}>{fp(st.maxDrawdown)}</span></p>
         <ResponsiveContainer width="100%" height={180}>
           <AreaChart data={dd} margin={{top:4,right:8,bottom:4,left:4}}>
-            <defs>
-              <linearGradient id="ddG" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f0556a" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#f0556a" stopOpacity={0.02}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
-            <XAxis dataKey="date" tickFormatter={xFmt} tick={{fill:'var(--text3)',fontSize:11}} axisLine={{stroke:'var(--border)'}} tickLine={false} interval="preserveStartEnd" minTickGap={60}/>
-            <YAxis domain={['auto',0]} tick={{fill:'var(--text3)',fontSize:11}} axisLine={{stroke:'var(--border)'}} tickLine={false} tickFormatter={v=>`${(v*100).toFixed(0)}%`} width={40}/>
-            <Tooltip {...tt} formatter={v=>[`${(v*100).toFixed(2)}%`,'Drawdown']}/>
-            <ReferenceLine y={0} stroke="var(--border2)"/>
-            <Area type="monotone" dataKey="drawdown" stroke="var(--red)" strokeWidth={1.5} fill="url(#ddG)" isAnimationActive={false}/>
+            <defs><linearGradient id="ddG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f0556a" stopOpacity={0.3}/><stop offset="95%" stopColor="#f0556a" stopOpacity={0.02}/></linearGradient></defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45"/>
+            <XAxis dataKey="date" tickFormatter={xFmt} tick={{fill:'#4a5a78',fontSize:11}} axisLine={{stroke:'#1e2d45'}} tickLine={false} interval="preserveStartEnd" minTickGap={60}/>
+            <YAxis domain={['auto',0]} tick={{fill:'#4a5a78',fontSize:11}} axisLine={{stroke:'#1e2d45'}} tickLine={false} tickFormatter={v=>`${(v*100).toFixed(0)}%`} width={40}/>
+            <Tooltip {...ttStyle} formatter={v=>[`${(v*100).toFixed(2)}%`,'Drawdown']}/>
+            <ReferenceLine y={0} stroke="#243352"/>
+            <Area type="monotone" dataKey="drawdown" stroke="#f0556a" strokeWidth={1.5} fill="url(#ddG)" isAnimationActive={false}/>
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       {vl.length>0&&(
-        <div style={chartCard}>
+        <div style={cc}>
           <p style={{fontSize:13,fontWeight:600,marginBottom:4}}>30-Day Rolling Volatility (Annualized)</p>
-          <p style={{fontSize:11,color:'var(--text3)',marginBottom:16}}>Trailing realized risk · σ₃₀ × √252</p>
+          <p style={{fontSize:11,color:'var(--t3)',marginBottom:16}}>Trailing realized risk · σ₃₀ × √252</p>
           <ResponsiveContainer width="100%" height={160}>
             <AreaChart data={vl} margin={{top:4,right:8,bottom:4,left:4}}>
-              <defs>
-                <linearGradient id="vG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f5a623" stopOpacity={0.25}/>
-                  <stop offset="95%" stopColor="#f5a623" stopOpacity={0.02}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
-              <XAxis dataKey="date" tickFormatter={xFmt} tick={{fill:'var(--text3)',fontSize:11}} axisLine={{stroke:'var(--border)'}} tickLine={false} interval="preserveStartEnd" minTickGap={60}/>
-              <YAxis tick={{fill:'var(--text3)',fontSize:11}} axisLine={{stroke:'var(--border)'}} tickLine={false} tickFormatter={v=>`${v.toFixed(0)}%`} width={40}/>
-              <Tooltip {...tt} formatter={v=>[`${v.toFixed(2)}%`,'30d Vol']}/>
-              <Area type="monotone" dataKey="vol" stroke="var(--amber)" strokeWidth={1.5} fill="url(#vG)" isAnimationActive={false}/>
+              <defs><linearGradient id="vG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f5a623" stopOpacity={0.25}/><stop offset="95%" stopColor="#f5a623" stopOpacity={0.02}/></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45"/>
+              <XAxis dataKey="date" tickFormatter={xFmt} tick={{fill:'#4a5a78',fontSize:11}} axisLine={{stroke:'#1e2d45'}} tickLine={false} interval="preserveStartEnd" minTickGap={60}/>
+              <YAxis tick={{fill:'#4a5a78',fontSize:11}} axisLine={{stroke:'#1e2d45'}} tickLine={false} tickFormatter={v=>`${v.toFixed(0)}%`} width={40}/>
+              <Tooltip {...ttStyle} formatter={v=>[`${v.toFixed(2)}%`,'30d Vol']}/>
+              <Area type="monotone" dataKey="vol" stroke="#f5a623" strokeWidth={1.5} fill="url(#vG)" isAnimationActive={false}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
-
-      <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'14px 18px'}}>
-        <p style={{fontSize:10,fontWeight:600,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:10}}>Methodology</p>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px 24px'}}>
-          {[['Daily Return','(NAV_t − NAV_{t−1}) / NAV_{t−1}'],['Ann. Return','(1 + R_cum)^(252/N) − 1'],
-            ['Ann. Volatility','σ_daily × √252 (sample std dev)'],['Sharpe Ratio','(R_ann − RFR) / σ_ann'],
-            ['Max Drawdown','min((NAV_t − Peak_t) / Peak_t)'],['Calmar Ratio','R_ann / |Max Drawdown|']]
-            .map(([k,v])=>(
-              <p key={k} style={{fontSize:11,color:'var(--text3)'}}>
-                <span style={{color:'var(--text2)',fontWeight:500}}>{k}:</span> {v}
-              </p>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
 // ── App ───────────────────────────────────────────────────────
 function App(){
-  const[selected,setSelected]=useState(null);
-  const allFunds=useMemo(()=>getAllFunds(),[]);
-  const cumulative=useMemo(()=>buildCumPerf(allFunds),[allFunds]);
-  const calendar=useMemo(()=>buildCalPerf(allFunds),[allFunds]);
-  const dividends=useMemo(()=>buildDivRecords(allFunds),[allFunds]);
+  const[sel,setSel]=useState(null);
+  const funds=useMemo(()=>allFunds(),[]);
+  const cum=useMemo(()=>cumPerf(funds),[funds]);
+  const cal=useMemo(()=>calPerf(funds),[funds]);
+  const div=useMemo(()=>divRecs(funds),[funds]);
 
-  const handleSelect=(id,name)=>{setSelected({id,name,data:allFunds[id]??[]});window.scrollTo({top:0,behavior:'smooth'});};
+  const pick=(id,name)=>{setSel({id,name,data:funds[id]??[]});window.scrollTo({top:0,behavior:'smooth'});};
 
   return(
     <div style={{minHeight:'100vh'}}>
-      <header style={{position:'sticky',top:0,zIndex:100,background:'rgba(10,14,26,.85)',backdropFilter:'blur(12px)',
-        borderBottom:'1px solid var(--border)',padding:'0 24px',height:56,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <header style={{position:'sticky',top:0,zIndex:100,background:'rgba(10,14,26,.88)',backdropFilter:'blur(12px)',borderBottom:'1px solid var(--b1)',padding:'0 24px',height:56,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <div style={{width:30,height:30,borderRadius:8,background:'var(--green-bg)',border:'1px solid rgba(16,217,140,.3)',
-            display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <span style={{fontSize:14,fontFamily:'var(--serif)',fontStyle:'italic',color:'var(--green)'}}>M</span>
-          </div>
+          <div style={{width:30,height:30,borderRadius:8,background:'rgba(16,217,140,.1)',border:'1px solid rgba(16,217,140,.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:'#10d98c'}}>M</div>
           <span style={{fontSize:14,fontWeight:600,letterSpacing:'-.01em'}}>Manulife MPF</span>
-          <span style={{fontSize:12,color:'var(--text3)',display:'none'}} className="hide-sm">Fund Analytics Platform</span>
+          <span style={{fontSize:12,color:'var(--t3)'}}>Fund Analytics Platform</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span style={{width:6,height:6,borderRadius:'50%',background:'var(--green)',display:'inline-block',animation:'pulse 2s infinite'}}/>
-          <span style={{fontSize:11,color:'var(--text3)'}}>Synthetic data</span>
+          <span style={{width:6,height:6,borderRadius:'50%',background:'var(--g)',display:'inline-block',animation:'pulse 2s infinite'}}/>
+          <span style={{fontSize:11,color:'var(--t3)'}}>Synthetic data · {Object.keys(funds).length} funds</span>
         </div>
       </header>
 
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
-
       <main style={{maxWidth:1200,margin:'0 auto',padding:'28px 24px 80px'}}>
-        <nav style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'var(--text3)',marginBottom:20}}>
-          <span style={{cursor:'pointer'}} onClick={()=>setSelected(null)}
-            onMouseEnter={e=>e.target.style.color='var(--text)'} onMouseLeave={e=>e.target.style.color='var(--text3)'}>
+        <nav style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'var(--t3)',marginBottom:20}}>
+          <span style={{cursor:'pointer'}} onClick={()=>setSel(null)}
+            onMouseEnter={e=>e.target.style.color='var(--t1)'} onMouseLeave={e=>e.target.style.color='var(--t3)'}>
             Fund Portal
           </span>
-          {selected&&<><span>›</span><span style={{color:'var(--text2)'}}>{selected.name}</span></>}
+          {sel&&<><span>›</span><span style={{color:'var(--t2)'}}>{sel.name}</span></>}
         </nav>
 
-        {selected?(
-          <FundAnalyzer fundId={selected.id} fundName={selected.name} rawData={selected.data} onBack={()=>setSelected(null)}/>
-        ):(
-          <>
-            <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,
-              padding:'24px 28px',marginBottom:24,boxShadow:'var(--shadow)',
-              backgroundImage:'radial-gradient(ellipse at 100% 0%,rgba(16,217,140,.06) 0%,transparent 60%)'}}>
-              <p style={{fontSize:11,fontWeight:600,letterSpacing:'.12em',textTransform:'uppercase',color:'var(--green)',marginBottom:8}}>
-                Quantitative Analytics
-              </p>
-              <h1 style={{fontSize:26,fontWeight:300,letterSpacing:'-.03em',color:'var(--text)',marginBottom:6,fontFamily:'var(--serif)',fontStyle:'italic'}}>
-                MPF Fund Analytics Dashboard
-              </h1>
-              <p style={{fontSize:13,color:'var(--text2)',lineHeight:1.6,maxWidth:600}}>
-                Institutional-grade performance attribution and risk analytics. Click any fund name to launch the full quantitative analyzer with Sharpe ratio, drawdown analysis, and rolling volatility charts.
-              </p>
-              <div style={{display:'flex',flexWrap:'wrap',gap:12,marginTop:20}}>
-                {[{l:'Funds',v:Object.keys(allFunds).length},{l:'History',v:'6 Years'},{l:'Metrics',v:'6 Computed'},{l:'Data Points',v:'~7,500'}].map(s=>(
-                  <div key={s.l} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 16px'}}>
-                    <p style={{fontSize:10,color:'var(--text3)',letterSpacing:'.08em',textTransform:'uppercase'}}>{s.l}</p>
-                    <p style={{fontSize:18,fontWeight:600,fontFamily:'var(--mono)',color:'var(--green)',marginTop:2}}>{s.v}</p>
-                  </div>
-                ))}
+        {sel
+          ? <FundAnalyzer fundId={sel.id} fundName={sel.name} rawData={sel.data} onBack={()=>setSel(null)}/>
+          : <>
+              <div style={{background:'var(--s1)',border:'1px solid var(--b1)',borderRadius:12,padding:'24px 28px',marginBottom:24,
+                backgroundImage:'radial-gradient(ellipse at 100% 0%,rgba(16,217,140,.06) 0%,transparent 60%)'}}>
+                <p style={{fontSize:11,fontWeight:600,letterSpacing:'.12em',textTransform:'uppercase',color:'var(--g)',marginBottom:8}}>Quantitative Analytics</p>
+                <h1 style={{fontSize:26,fontWeight:300,letterSpacing:'-.03em',marginBottom:6}}>MPF Fund Analytics Dashboard</h1>
+                <p style={{fontSize:13,color:'var(--t2)',lineHeight:1.6,maxWidth:560}}>
+                  Institutional-grade performance attribution and risk analytics. Click any fund name to launch the full quantitative analyzer with Sharpe ratio, drawdown analysis, and rolling volatility.
+                </p>
+                <div style={{display:'flex',flexWrap:'wrap',gap:12,marginTop:20}}>
+                  {[{l:'Funds',v:Object.keys(funds).length},{l:'History',v:'6 Years'},{l:'Metrics',v:'6 Computed'},{l:'Data Points',v:'~7,500'}].map(s=>(
+                    <div key={s.l} style={{background:'var(--s2)',border:'1px solid var(--b1)',borderRadius:8,padding:'10px 16px'}}>
+                      <p style={{fontSize:10,color:'var(--t3)',letterSpacing:'.08em',textTransform:'uppercase'}}>{s.l}</p>
+                      <p style={{fontSize:18,fontWeight:600,fontFamily:'var(--mono)',color:'var(--g)',marginTop:2}}>{s.v}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <FundTable cumulative={cumulative} calendar={calendar} dividends={dividends} onSelectFund={handleSelect}/>
-          </>
-        )}
+              <FundTable cum={cum} cal={cal} div={div} onSel={pick}/>
+            </>
+        }
       </main>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
 </script>
 </body>
 </html>
