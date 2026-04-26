@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.10.3/Recharts.min.js"></script>
+<script src="https://unpkg.com/recharts@2.5.0/umd/Recharts.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -64,7 +64,7 @@ function computeMaxDD(s){
   }
   return{maxDrawdown:maxDD,peakDate:mPeak,troughDate:mTrough,drawdownSeries:series};
 }
-function buildEquityCurve(s){const b=s[0].nav;return s.map(p=>({date:p.date,value:parseFloat(((p.nav/b)*100).toFixed(4))]));}
+function buildEquityCurve(s){const b=s[0].nav;return s.map(p=>({date:p.date,value:parseFloat(((p.nav/b)*100).toFixed(4))}));}
 function buildRollingVol(s,w=30){
   const dr=computeDailyReturns(s),res=[];
   for(let i=w-1;i<dr.length;i++)res.push({date:s[i+1].date,vol:parseFloat((annVol(dr.slice(i-w+1,i+1))*100).toFixed(4))});
@@ -180,7 +180,7 @@ function Th({col,label,sort,onSort,left}){
 
 function StatCard({label,value,sub,color='var(--text)'}){
   return(
-    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:var(--radius),padding:'16px',transition:'border-color .2s'}}>
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:'16px',transition:'border-color .2s'}}>
       <p style={{fontSize:10,fontWeight:600,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:8}}>{label}</p>
       <p style={{fontSize:22,fontWeight:600,fontFamily:'var(--mono)',color,lineHeight:1}}>{value}</p>
       {sub&&<p style={{fontSize:11,color:'var(--text3)',marginTop:6,lineHeight:1.4}}>{sub}</p>}
@@ -208,7 +208,7 @@ function FundTable({cumulative,calendar,dividends,onSelect}){
   const trStyle=i=>({borderBottom:'1px solid var(--border)',background:i%2===0?'transparent':'rgba(255,255,255,.01)',});
 
   return(
-    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:var(--radius),overflow:'hidden',boxShadow:'var(--shadow)'}}>
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden',boxShadow:'var(--shadow)'}}>
       <div style={{padding:'20px 20px 0'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:12}}>
           <div>
@@ -325,7 +325,7 @@ function FundAnalyzer({fundId,fundName,rawData,onBack}){
   const ddCol=stats.maxDrawdown>-0.1?'var(--green)':stats.maxDrawdown>-0.25?'var(--amber)':'var(--red)';
   const calCol=stats.calmarRatio>=0.5?'var(--green)':stats.calmarRatio>=0.25?'var(--amber)':'var(--red)';
 
-  const chartCard={background:'var(--surface)',border:'1px solid var(--border)',borderRadius:var(--radius),padding:20,boxShadow:'var(--shadow)'};
+  const chartCard={background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:20,boxShadow:'var(--shadow)'};
   const tt={contentStyle:{background:'var(--surface2)',border:'1px solid var(--border2)',borderRadius:8,fontSize:12},labelStyle:{color:'var(--text2)'}};
 
   return(
@@ -487,7 +487,7 @@ function App(){
           <FundAnalyzer fundId={selected.id} fundName={selected.name} rawData={selected.data} onBack={()=>setSelected(null)}/>
         ):(
           <>
-            <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:var(--radius),
+            <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,
               padding:'24px 28px',marginBottom:24,boxShadow:'var(--shadow)',
               backgroundImage:'radial-gradient(ellipse at 100% 0%,rgba(16,217,140,.06) 0%,transparent 60%)'}}>
               <p style={{fontSize:11,fontWeight:600,letterSpacing:'.12em',textTransform:'uppercase',color:'var(--green)',marginBottom:8}}>
