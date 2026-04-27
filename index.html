@@ -80,60 +80,97 @@ const MPF_29 = [
 const MPF_API = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/mpf.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83&productId=8';
 const ILA_API = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/investment-linked-assurance-scheme.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E6%8A%95%E8%B3%87%E8%A8%88%E5%8A%832&productId=21';
 
-// ── All Manulife endpoint variants to try ────────────────────
+// ── Endpoint fetch strategy ──────────────────────────────────
+// Priority order: direct → corsproxy.io → allorigins → codetabs → thingproxy
+// Tries both www.manulife.com.hk and scmpf.manulife.com.hk with zh-HK and EN params
 function buildEndpointVariants(apiUrl) {
-  const PROXIES = [
-    url => url,                                                        // direct
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,        // corsproxy.io
-    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, // allorigins
-    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, // codetabs
-    url => `https://thingproxy.freeboard.io/fetch/${url}`,            // thingproxy
-  ];
+  const isMPF = apiUrl.includes('productId=8');
+  const schemeParam = isMPF ? 'mpf' : 'ila';
 
-  // Also try English vs Chinese product param variants
-  const MPF_URLS = [
-    apiUrl,
-    apiUrl.replace('%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83',
-      'Manulife+Global+Select+(MPF)+Scheme'),
-    'https://scmpf.manulife.com.hk/zh-hk/fund-price/mpf.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83&productId=8',
-    'https://scmpf.manulife.com.hk/en/fund-price/mpf.html/v2/fundlist?product=Manulife+Global+Select+(MPF)+Scheme&productId=8',
-  ];
+  // Determine both URL variants (zh-HK and EN)
+  const MPF_ZH  = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/mpf.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83&productId=8';
+  const MPF_EN  = 'https://www.manulife.com.hk/en/individual/fund-price/mpf.html/v2/fundlist?product=Manulife+Global+Select+%28MPF%29+Scheme&productId=8';
+  const ILA_ZH  = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/investment-linked-assurance-scheme.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E6%8A%95%E8%B3%87%E8%A8%88%E5%8A%832&productId=21';
+  const ILA_EN  = 'https://www.manulife.com.hk/en/individual/fund-price/investment-linked-assurance-scheme.html/v2/fundlist?product=Manulife+Investment+Plus+2&productId=21';
+  const SCMPF_ZH= isMPF
+    ? 'https://scmpf.manulife.com.hk/zh-hk/fund-price/mpf.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83&productId=8'
+    : 'https://scmpf.manulife.com.hk/zh-hk/fund-price/ila.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E6%8A%95%E8%B3%87%E8%A8%88%E5%8A%832&productId=21';
+
+  const BASE_URLS = isMPF ? [MPF_ZH, MPF_EN, SCMPF_ZH] : [ILA_ZH, ILA_EN, SCMPF_ZH];
 
   const variants = [];
-  for (const base of MPF_URLS) {
-    for (const proxy of PROXIES) {
-      variants.push({url: proxy(base), isProxy: proxy !== (u=>u), proxyName: proxy.toString().match(/https:\/\/([^\/\?]+)/)?.[1]||'direct'});
-    }
+
+  // 1. Try direct fetch first for each URL
+  for (const base of BASE_URLS) {
+    variants.push({url: base, proxyName: 'direct'});
   }
+
+  // 2. corsproxy.io
+  for (const base of BASE_URLS) {
+    variants.push({url: `https://corsproxy.io/?${encodeURIComponent(base)}`, proxyName: 'corsproxy.io'});
+  }
+
+  // 3. allorigins
+  for (const base of BASE_URLS) {
+    variants.push({url: `https://api.allorigins.win/get?url=${encodeURIComponent(base)}`, proxyName: 'allorigins'});
+  }
+
+  // 4. codetabs
+  for (const base of BASE_URLS) {
+    variants.push({url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(base)}`, proxyName: 'codetabs'});
+  }
+
   return variants;
 }
 
-async function tryFetchJson(url, timeout=6000) {
-  const r = await fetch(url, {signal: AbortSignal.timeout(timeout), headers:{'Accept':'application/json'}});
+async function tryFetchJson(url, timeout=7000) {
+  const isProxy = url.includes('allorigins') || url.includes('corsproxy') || url.includes('codetabs');
+  const headers = {
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'zh-HK,zh;q=0.9,en;q=0.8',
+  };
+  // Add browser-like headers for direct calls
+  if (!isProxy) {
+    headers['Referer'] = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/mpf.html';
+    headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  }
+  const r = await fetch(url, {signal: AbortSignal.timeout(timeout), headers, mode: 'cors'});
   if (!r.ok) return null;
   const text = await r.text();
-  // allorigins wraps in {contents: "..."}
+  if (!text || text.trim().length === 0) return null;
+  // allorigins wraps response: {"contents":"...","status":{"url":...}}
   if (text.includes('"contents"') && text.includes('"status"')) {
-    const wrapper = JSON.parse(text);
-    if (wrapper.contents) return JSON.parse(wrapper.contents);
+    try {
+      const wrapper = JSON.parse(text);
+      if (wrapper.contents && wrapper.contents.trim()) {
+        const inner = JSON.parse(wrapper.contents);
+        return inner;
+      }
+    } catch(e) {}
   }
   return JSON.parse(text);
 }
 
-async function fetchLive(apiUrl) {
+async function fetchLiveWithRetry(apiUrl, setStatusFn) {
   const variants = buildEndpointVariants(apiUrl);
+  let attempt = 0;
   for (const v of variants) {
+    attempt++;
     try {
       const data = await tryFetchJson(v.url, 7000);
       if (data) {
         const list = parseManulifeResponse(data);
         if (list && list.length > 0) {
-          return {data, src: v.proxyName === 'direct' ? 'live' : 'proxy', proxyUsed: v.proxyName};
+          return {data, src: v.proxyName === 'direct' ? 'live' : 'proxy', proxyUsed: v.proxyName, attempts: attempt};
         }
       }
     } catch(e) { /* try next */ }
   }
   return null;
+}
+
+async function fetchLive(apiUrl) {
+  return fetchLiveWithRetry(apiUrl);
 }
 
 function parseManulifeResponse(raw) {
@@ -531,13 +568,18 @@ function LivePriceTable({apiUrl, title, fundCount, schemeKey, onAnalyze}) {
       </div>
 
       <div style={{padding:'10px 20px',borderTop:'1px solid var(--b1)',background:'var(--s2)',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
-        <p style={{fontSize:11,color:'var(--t3)'}}>
-          {status==='synthetic'
-            ? '⚠ Live prices could not be retrieved — Manulife's API blocks cross-origin requests from non-HK browsers. Synthetic 6-year GBM data shown. All prices, dates and changes above are simulated.'
-            : status==='live'
-            ? 'Source: manulife.com.hk · Unit prices may fall as well as rise. Past performance is not indicative of future results.'
-            : 'Source: manulife.com.hk (via CORS proxy) · Unit prices may fall as well as rise. Past performance is not indicative of future results.'}
-        </p>
+        <div>
+          {status==='synthetic'?(
+            <p style={{fontSize:11,color:'var(--am)'}}>
+              ⚠ Live prices unavailable — Manulife restricts API access to HK-origin browsers. Prices shown are <strong>synthetic simulation only</strong>. If you are browsing from Hong Kong, click Refresh above.
+            </p>
+          ):(
+            <p style={{fontSize:11,color:'var(--t3)'}}>
+              ✓ Source: manulife.com.hk{status==='proxy'?' (via CORS proxy)':''}
+              {' · Unit prices may fall as well as rise · Past performance is not indicative of future results.'}
+            </p>
+          )}
+        </div>
         <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--t3)'}}>{rows.length} funds</span>
       </div>
     </div>
