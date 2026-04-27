@@ -80,45 +80,98 @@ const MPF_29 = [
 const MPF_API = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/mpf.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83&productId=8';
 const ILA_API = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/investment-linked-assurance-scheme.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E6%8A%95%E8%B3%87%E8%A8%88%E5%8A%832&productId=21';
 
-async function fetchLive(apiUrl) {
-  // Try direct
-  try {
-    const r = await fetch(apiUrl, {signal: AbortSignal.timeout(5000)});
-    if (r.ok) { const d = await r.json(); return {data: d, src: 'live'}; }
-  } catch(e) {}
-  // Try allorigins proxy
-  try {
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
-    const r = await fetch(proxy, {signal: AbortSignal.timeout(8000)});
-    if (r.ok) {
-      const wrapper = await r.json();
-      const d = JSON.parse(wrapper.contents);
-      return {data: d, src: 'proxy'};
+// ── All Manulife endpoint variants to try ────────────────────
+function buildEndpointVariants(apiUrl) {
+  const PROXIES = [
+    url => url,                                                        // direct
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,        // corsproxy.io
+    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, // allorigins
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, // codetabs
+    url => `https://thingproxy.freeboard.io/fetch/${url}`,            // thingproxy
+  ];
+
+  // Also try English vs Chinese product param variants
+  const MPF_URLS = [
+    apiUrl,
+    apiUrl.replace('%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83',
+      'Manulife+Global+Select+(MPF)+Scheme'),
+    'https://scmpf.manulife.com.hk/zh-hk/fund-price/mpf.html/v2/fundlist?product=%E5%AE%8F%E5%88%A9%E7%92%B0%E7%90%83%E7%B2%BE%E9%81%B8(%E5%BC%B7%E7%A9%8D%E9%87%91)%E8%A8%88%E5%8A%83&productId=8',
+    'https://scmpf.manulife.com.hk/en/fund-price/mpf.html/v2/fundlist?product=Manulife+Global+Select+(MPF)+Scheme&productId=8',
+  ];
+
+  const variants = [];
+  for (const base of MPF_URLS) {
+    for (const proxy of PROXIES) {
+      variants.push({url: proxy(base), isProxy: proxy !== (u=>u), proxyName: proxy.toString().match(/https:\/\/([^\/\?]+)/)?.[1]||'direct'});
     }
-  } catch(e) {}
+  }
+  return variants;
+}
+
+async function tryFetchJson(url, timeout=6000) {
+  const r = await fetch(url, {signal: AbortSignal.timeout(timeout), headers:{'Accept':'application/json'}});
+  if (!r.ok) return null;
+  const text = await r.text();
+  // allorigins wraps in {contents: "..."}
+  if (text.includes('"contents"') && text.includes('"status"')) {
+    const wrapper = JSON.parse(text);
+    if (wrapper.contents) return JSON.parse(wrapper.contents);
+  }
+  return JSON.parse(text);
+}
+
+async function fetchLive(apiUrl) {
+  const variants = buildEndpointVariants(apiUrl);
+  for (const v of variants) {
+    try {
+      const data = await tryFetchJson(v.url, 7000);
+      if (data) {
+        const list = parseManulifeResponse(data);
+        if (list && list.length > 0) {
+          return {data, src: v.proxyName === 'direct' ? 'live' : 'proxy', proxyUsed: v.proxyName};
+        }
+      }
+    } catch(e) { /* try next */ }
+  }
   return null;
 }
 
 function parseManulifeResponse(raw) {
   if (!raw) return null;
-  // Try common response shapes
-  const candidates = [raw, raw.data, raw.fundList, raw.funds, raw.result, raw.items];
+  // Walk all plausible shapes from Manulife API
+  const candidates = [
+    raw,
+    raw.data, raw.fundList, raw.funds, raw.result, raw.items,
+    raw.fundPriceList, raw.priceList, raw.constituents,
+    raw.fundDetails, raw.fundData, raw.schemeDetails,
+    raw[0], // sometimes an array directly
+  ];
   for (const c of candidates) {
     if (Array.isArray(c) && c.length > 0) return c;
+  }
+  // Try nested one level deeper
+  if (raw.data && typeof raw.data === 'object') {
+    for (const v of Object.values(raw.data)) {
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
   }
   return null;
 }
 
 function mapLiveFund(f, idx) {
-  // Manulife API field names (vary by endpoint version)
-  const name = f.fundName || f.name || f.FundName || `Fund ${idx+1}`;
-  const ccy  = f.currency || f.Currency || 'HKD';
-  const price = parseFloat(f.price || f.Price || f.nav || f.NAV || 0);
-  const date  = f.date || f.Date || f.priceDate || f.PriceDate || '—';
-  const chg   = f.change || f.Change || f.dayChange || f.dailyChange || '—';
-  const chgPct= f.changePercentage || f.changePct || f.pctChange || chg;
-  return { id: `LIVE-${idx}`, name, ccy, price, date, chg, chgPct, isLive: true };
+  // Handle all known Manulife API field name conventions
+  const name    = f.fundName    || f.name       || f.FundName    || f.constituentFundName || `Fund ${idx+1}`;
+  const ccy     = f.currency    || f.Currency   || f.ccy         || 'HKD';
+  const priceRaw= f.price       || f.Price      || f.nav         || f.NAV || f.unitPrice || f.unitNav || 0;
+  const price   = parseFloat(priceRaw) || 0;
+  const date    = f.date        || f.Date        || f.priceDate   || f.effectiveDate || f.asOfDate || '—';
+  const chgAmt  = f.change      || f.Change      || f.priceChange || f.dayChange     || '—';
+  const chgPct  = f.changePercentage || f.changePct || f.pctChange || f.changePercent || f.percentChange || '—';
+  const chgDisplay = chgPct !== '—' ? (parseFloat(chgPct)>=0?'+':'')+parseFloat(chgPct).toFixed(2)+'%' : chgPct;
+  return { id: `LIVE-${idx}`, name, ccy, price, date, chg: chgAmt, chgPct: chgDisplay, isLive: true };
 }
+
+
 
 // ─────────────────────────────────────────────────────────────
 // SYNTHETIC NAV HISTORY (for analyzer — 6 years GBM)
@@ -327,11 +380,11 @@ function LivePriceTable({apiUrl, title, fundCount, schemeKey, onAnalyze}) {
   },[calData,search,sort]);
 
   const statusBadge = {
-    loading:   {color:'var(--bl)',  bg:'rgba(77,158,247,.1)',  border:'rgba(77,158,247,.3)',  text:'Fetching live prices…'},
-    live:      {color:'var(--g)',   bg:'rgba(16,217,140,.1)', border:'rgba(16,217,140,.3)', text:'Live data'},
-    proxy:     {color:'var(--g)',   bg:'rgba(16,217,140,.1)', border:'rgba(16,217,140,.3)', text:'Live data (via proxy)'},
-    synthetic: {color:'var(--am)', bg:'rgba(245,166,35,.1)', border:'rgba(245,166,35,.3)', text:'CORS restricted — showing synthetic data'},
-    error:     {color:'var(--r)',   bg:'rgba(240,85,106,.1)', border:'rgba(240,85,106,.3)', text:'Data unavailable'},
+    loading:   {color:'var(--bl)',  bg:'rgba(77,158,247,.1)',  border:'rgba(77,158,247,.3)',  text:'Fetching live prices from Manulife…'},
+    live:      {color:'var(--g)',   bg:'rgba(16,217,140,.1)', border:'rgba(16,217,140,.3)', text:'✓ Live data from manulife.com.hk'},
+    proxy:     {color:'var(--g)',   bg:'rgba(16,217,140,.1)', border:'rgba(16,217,140,.3)', text:'✓ Live data from manulife.com.hk (via CORS proxy)'},
+    synthetic: {color:'var(--am)', bg:'rgba(245,166,35,.1)', border:'rgba(245,166,35,.3)', text:'⚠ All proxies blocked — showing synthetic data'},
+    error:     {color:'var(--r)',   bg:'rgba(240,85,106,.1)', border:'rgba(240,85,106,.3)', text:'✗ Data unavailable'},
   }[status];
 
   const ts=a=>({padding:'10px 18px',fontSize:13,fontWeight:500,border:'none',borderBottom:a?'2px solid var(--g)':'2px solid transparent',background:'transparent',color:a?'var(--g)':'var(--t2)',cursor:'pointer',fontFamily:'var(--fn)'});
@@ -480,8 +533,10 @@ function LivePriceTable({apiUrl, title, fundCount, schemeKey, onAnalyze}) {
       <div style={{padding:'10px 20px',borderTop:'1px solid var(--b1)',background:'var(--s2)',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
         <p style={{fontSize:11,color:'var(--t3)'}}>
           {status==='synthetic'
-            ? '⚠ Live prices unavailable due to CORS restrictions. Synthetic data shown for demonstration. Performance figures use 6-year synthetic history.'
-            : 'Unit prices may fall as well as rise. Past performance is not indicative of future results. Investment involves risks.'}
+            ? '⚠ Live prices could not be retrieved — Manulife's API blocks cross-origin requests from non-HK browsers. Synthetic 6-year GBM data shown. All prices, dates and changes above are simulated.'
+            : status==='live'
+            ? 'Source: manulife.com.hk · Unit prices may fall as well as rise. Past performance is not indicative of future results.'
+            : 'Source: manulife.com.hk (via CORS proxy) · Unit prices may fall as well as rise. Past performance is not indicative of future results.'}
         </p>
         <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--t3)'}}>{rows.length} funds</span>
       </div>
