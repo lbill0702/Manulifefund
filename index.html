@@ -83,15 +83,9 @@ const ILA_API = 'https://www.manulife.com.hk/zh-hk/individual/fund-price/investm
 // ── Endpoint fetch strategy ──────────────────────────────────
 // // Priority order: CF Worker → direct → allorigins → codetabs → thingproxy
 // Tries both www.manulife.com.hk and scmpf.manulife.com.hk with zh-HK and EN params
+const CF_WORKER = 'https://manulife-fund-dashboard.lbill0702.workers.dev';
+
 function buildEndpointVariants(apiUrl) {
-  // 0. Cloudflare Worker proxy (highest priority — server-side, no CORS issues)
-variants.push({
-  url: CF_WORKER + '?scheme=' + schemeParam,
-  proxyName: 'cloudflare-worker',
-  isProxy: true,
-  timeout: 8000,
-});
-  const CF_WORKER = 'https://manulife-fund-dashboard.lbill0702.workers.dev';
   const isMPF = apiUrl.includes('productId=8');
   const schemeParam = isMPF ? 'mpf' : 'ila';
 
@@ -107,6 +101,14 @@ variants.push({
   const BASE_URLS = isMPF ? [MPF_ZH, MPF_EN, SCMPF_ZH] : [ILA_ZH, ILA_EN, SCMPF_ZH];
 
   const variants = [];
+
+  // 0. Cloudflare Worker (highest priority — server-side, bypasses CORS)
+  variants.push({
+    url: CF_WORKER + '?scheme=' + schemeParam,
+    proxyName: 'cloudflare-worker',
+    isProxy: true,
+    timeout: 8000,
+  });
 
   // 1. Try direct fetch first for each URL
   for (const base of BASE_URLS) {
